@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000
 // ─── Database ──────────────────────────────────────────────────────────────────
 
 let _db
+let _dbReady = null
+
 function getDb() {
   if (!_db) {
     if (process.env.TURSO_DATABASE_URL) {
@@ -22,6 +24,11 @@ function getDb() {
     }
   }
   return _db
+}
+
+function ensureDb() {
+  if (!_dbReady) _dbReady = initDb()
+  return _dbReady
 }
 
 function toObj(r) {
@@ -51,6 +58,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, secure: process.env.NODE_ENV === 'production' }
 }))
+
+app.use((req, res, next) => ensureDb().then(() => next()).catch(next))
 
 const auth = (req, res, next) => req.session.user ? next() : res.status(401).json({ error: 'Unauthorized' })
 const adminAuth = (req, res, next) => (req.session.user?.role === 'admin') ? next() : res.status(401).json({ error: 'Unauthorized' })
@@ -182,7 +191,8 @@ app.patch('/api/admin/bookings/:id', adminAuth, async (req, res) => {
 
 // ─── Start ─────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, async () => {
-  await initDb()
-  console.log(`✅ AddyCleans running at http://localhost:${PORT}`)
-})
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`✅ AddyCleans running at http://localhost:${PORT}`))
+}
+
+module.exports = app
