@@ -1,5 +1,5 @@
-.next/
 node_modules/
 data/
 .env.local
 *.db
+.next/

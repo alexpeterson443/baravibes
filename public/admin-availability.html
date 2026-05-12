@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Availability – AddyCleans Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <div class="mb-8">
+      <a href="/admin.html" class="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block">← Back to dashboard</a>
+      <h1 class="text-2xl font-bold text-gray-900">My Weekly Availability</h1>
+      <p class="text-gray-500 mt-1">Set the days and hours you're available to take on cleaning sessions. Clients can only book within these windows.</p>
+    </div>
+
+    <div id="msg-success" class="hidden bg-green-50 border border-green-100 text-green-700 rounded-lg px-4 py-3 mb-4 text-sm"></div>
+    <div id="msg-error" class="hidden bg-red-50 border border-red-100 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm"></div>
+
+    <!-- Preview -->
+    <div id="preview-box" class="hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">Current Schedule Preview</h3>
+      <div id="preview" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <form id="form" class="space-y-3">
+      <div id="days-container"></div>
+      <div class="pt-2 flex gap-3">
+        <button type="submit" id="btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow-md shadow-green-100">Save Availability</button>
+        <a href="/admin.html" class="px-6 bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 text-center">Cancel</a>
+      </div>
+    </form>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    let slots = Array.from({length:7},(_,dow)=>({day_of_week:dow, enabled:false, start_time:'09:00', end_time:'17:00'}))
+
+    function renderPreview() {
+      const active = slots.filter(s=>s.enabled)
+      const box = document.getElementById('preview-box')
+      box.classList.toggle('hidden', active.length===0)
+      document.getElementById('preview').innerHTML = active.map(s=>`
+        <span class="bg-green-50 border border-green-100 text-green-700 text-sm px-3 py-1.5 rounded-lg">
+          <strong>${DAY_NAMES[s.day_of_week].slice(0,3)}</strong> ${fmt(s.start_time)} – ${fmt(s.end_time)}
+        </span>`).join('')
+    }
+
+    function renderDays() {
+      document.getElementById('days-container').innerHTML = slots.map((slot,dow)=>`
+        <div class="bg-white rounded-2xl border ${slot.enabled?'border-green-200':'border-gray-100'} shadow-sm overflow-hidden">
+          <div class="p-4 flex items-center gap-4">
+            <label class="flex items-center gap-3 cursor-pointer flex-1">
+              <div onclick="toggleDay(${dow})" class="w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer ${slot.enabled?'bg-green-600 border-green-600':'border-gray-300'}">
+                ${slot.enabled?'<svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
+              </div>
+              <span class="font-semibold text-base ${slot.enabled?'text-gray-900':'text-gray-400'}">${DAY_NAMES[dow]}</span>
+            </label>
+            ${slot.enabled?`
+              <div class="flex items-center gap-2 text-sm">
+                <input type="time" value="${slot.start_time}" onchange="slots[${dow}].start_time=this.value;renderPreview()" class="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                <span class="text-gray-400">to</span>
+                <input type="time" value="${slot.end_time}" onchange="slots[${dow}].end_time=this.value;renderPreview()" class="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+              </div>`:''}
+          </div>
+        </div>`).join('')
+      renderPreview()
+    }
+
+    function toggleDay(dow) {
+      slots[dow].enabled = !slots[dow].enabled
+      renderDays()
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const btn = document.getElementById('btn')
+      btn.textContent = 'Saving…'; btn.disabled = true
+      document.getElementById('msg-error').classList.add('hidden')
+      document.getElementById('msg-success').classList.add('hidden')
+
+      const activeSlots = slots.filter(s=>s.enabled).map(({day_of_week,start_time,end_time})=>({day_of_week,start_time,end_time}))
+      const res = await fetch('/api/admin/availability',{
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({slots:activeSlots})
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        document.getElementById('msg-error').textContent = data.error
+        document.getElementById('msg-error').classList.remove('hidden')
+      } else {
+        document.getElementById('msg-success').textContent = '✅ Availability saved! Clients can now see and book these time slots.'
+        document.getElementById('msg-success').classList.remove('hidden')
+        setTimeout(()=>document.getElementById('msg-success').classList.add('hidden'), 4000)
+      }
+      btn.textContent = 'Save Availability'; btn.disabled = false
+    })
+
+    async function init() {
+      const user = await requireAuth('admin')
+      if (!user) return
+      renderNav(user)
+
+      const data = await fetch('/api/admin/availability').then(r=>r.json())
+      for (const s of data.slots||[]) {
+        slots[s.day_of_week] = { day_of_week: s.day_of_week, enabled: true, start_time: s.start_time, end_time: s.end_time }
+      }
+      renderDays()
+    }
+    init()
+  </script>
+</body>
+</html>

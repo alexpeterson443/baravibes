@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard – AddyCleans</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p class="text-gray-500 mt-1">Manage bookings and see client availability.</p>
+      </div>
+      <a href="/admin-availability.html" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">Set My Availability</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div class="bg-amber-50 rounded-2xl p-5"><div id="stat-pending" class="text-3xl font-bold text-amber-600">0</div><div class="text-sm text-gray-600 mt-1">Pending requests</div></div>
+      <div class="bg-green-50 rounded-2xl p-5"><div id="stat-accepted" class="text-3xl font-bold text-green-600">0</div><div class="text-sm text-gray-600 mt-1">Confirmed bookings</div></div>
+      <div class="bg-red-50 rounded-2xl p-5"><div id="stat-rejected" class="text-3xl font-bold text-red-500">0</div><div class="text-sm text-gray-600 mt-1">Declined</div></div>
+      <div class="bg-blue-50 rounded-2xl p-5"><div id="stat-total" class="text-3xl font-bold text-blue-600">0</div><div class="text-sm text-gray-600 mt-1">Total requests</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-6 border-b border-gray-200">
+      <button onclick="setTab('requests')" id="tab-requests" class="px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px text-green-600 border-green-600">Requests</button>
+      <button onclick="setTab('availability')" id="tab-availability" class="px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px text-gray-500 border-transparent hover:text-gray-700">Client Availability</button>
+      <button onclick="setTab('history')" id="tab-history" class="px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px text-gray-500 border-transparent hover:text-gray-700">All Bookings</button>
+    </div>
+
+    <div id="tab-content-requests"></div>
+    <div id="tab-content-availability" class="hidden"></div>
+    <div id="tab-content-history" class="hidden"></div>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let allRequests = [], allAvailability = [], weekOffset = 0, currentTab = 'requests'
+
+    function setTab(tab) {
+      currentTab = tab
+      ;['requests','availability','history'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`)
+        const content = document.getElementById(`tab-content-${t}`)
+        if (t===tab) {
+          btn.className = 'px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px text-green-600 border-green-600'
+          content.classList.remove('hidden')
+        } else {
+          btn.className = 'px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px text-gray-500 border-transparent hover:text-gray-700'
+          content.classList.add('hidden')
+        }
+      })
+    }
+
+    function getMonday(off=0) {
+      const d = new Date()
+      const day = d.getDay()
+      d.setDate(d.getDate() - (day===0?6:day-1) + off*7)
+      d.setHours(0,0,0,0)
+      return d
+    }
+    function toYMD(d) { return d.toISOString().split('T')[0] }
+
+    function renderRequests(reqs) {
+      const pending = reqs.filter(r=>r.status==='pending')
+      document.getElementById('tab-requests').textContent = `Requests${pending.length?` (${pending.length})`:''}`
+      if (pending.length===0) {
+        document.getElementById('tab-content-requests').innerHTML = `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center"><div class="text-4xl mb-3">✅</div><h3 class="text-lg font-semibold text-gray-700 mb-1">All caught up!</h3><p class="text-gray-400 text-sm">No pending booking requests right now.</p></div>`
+        return
+      }
+      document.getElementById('tab-content-requests').innerHTML = `<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${pending.map(req=>`
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div><div class="font-semibold text-gray-900">${req.client_name}</div><div class="text-xs text-gray-500">${req.client_email}</div></div>
+            ${statusBadge(req.status)}
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3 mb-3">
+            <div class="text-sm font-medium text-gray-800 mb-1">📅 ${new Date(req.requested_date+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+            <div class="text-sm text-gray-600">${fmt(req.start_time)} – ${fmt(req.end_time)}</div>
+          </div>
+          ${req.message?`<div class="bg-blue-50 rounded-lg p-3 mb-3 text-sm text-gray-700 italic">"${req.message}"</div>`:''}
+          <div class="text-xs text-gray-400 mb-4">Requested ${new Date(req.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+          <div class="flex gap-2">
+            <button onclick="updateStatus(${req.id},'accepted')" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg">✓ Accept</button>
+            <button onclick="updateStatus(${req.id},'rejected')" class="flex-1 bg-white hover:bg-red-50 text-red-600 border border-red-200 text-sm font-semibold py-2 rounded-lg">✗ Decline</button>
+          </div>
+        </div>`).join('')}</div>`
+    }
+
+    function renderAvailabilityGrid(availability) {
+      const monday = getMonday(weekOffset)
+      const days = Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return d})
+      const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+      const DOW = [1,2,3,4,5,6,0]
+      const hours = Array.from({length:13},(_,i)=>i+7)
+
+      function clientsAt(dow,hour) {
+        return availability.filter(a=>{
+          if(a.day_of_week!==dow) return false
+          const [sh]=a.start_time.split(':').map(Number)
+          const [eh]=a.end_time.split(':').map(Number)
+          return hour>=sh&&hour<eh
+        })
+      }
+
+      const start = monday.toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      const end = days[6].toLocaleDateString('en-US',{month:'short',day:'numeric'})
+
+      document.getElementById('tab-content-availability').innerHTML = `
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div><h2 class="font-semibold text-gray-900">Client Availability Grid</h2><p class="text-xs text-gray-500 mt-0.5">See when your clients are free this week</p></div>
+            <div class="flex items-center gap-2">
+              <button onclick="changeAvailWeek(-1)" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600">←</button>
+              <span class="text-sm font-medium text-gray-700 min-w-28 text-center">${start} – ${end}</span>
+              <button onclick="changeAvailWeek(1)" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600">→</button>
+            </div>
+          </div>
+          <div class="p-6 overflow-x-auto">
+            ${availability.length===0?'<div class="text-center py-8 text-gray-400"><div class="text-3xl mb-2">📭</div><p class="text-sm">No clients have submitted availability for this week yet.</p></div>':`
+            <table class="w-full text-xs border-collapse">
+              <thead><tr>
+                <th class="w-14 py-2 text-left text-gray-500 font-medium">Time</th>
+                ${DAYS.map((d,i)=>`<th class="py-2 text-center text-gray-600 font-medium min-w-20"><div>${d}</div><div class="text-gray-400 font-normal">${days[i].toLocaleDateString('en-US',{month:'numeric',day:'numeric'})}</div></th>`).join('')}
+              </tr></thead>
+              <tbody>${hours.map(hour=>`
+                <tr class="border-t border-gray-100">
+                  <td class="py-1 pr-2 text-gray-400">${hour%12||12}${hour>=12?'pm':'am'}</td>
+                  ${DOW.map(dow=>`<td class="py-1 px-0.5">${clientsAt(dow,hour).map(c=>`<div class="bg-green-100 text-green-700 rounded px-1.5 py-0.5 text-xs leading-tight" title="${c.conflict_notes||''}">${c.client_name.split(' ')[0]}${c.conflict_notes?' ⚠️':''}</div>`).join('')||'<div class="h-4"></div>'}</td>`).join('')}
+                </tr>`).join('')}
+              </tbody>
+            </table>`}
+            <div class="mt-4 flex items-center gap-4 text-xs text-gray-500">
+              <span class="flex items-center gap-1.5"><span class="w-3 h-3 bg-green-100 border border-green-200 rounded inline-block"></span> Available</span>
+              <span>⚠️ = has conflict notes (hover to see)</span>
+            </div>
+          </div>
+        </div>`
+    }
+
+    function renderHistory(reqs) {
+      document.getElementById('tab-content-history').innerHTML = `
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100"><h2 class="font-semibold text-gray-900">All Booking Requests</h2></div>
+          ${reqs.length===0?'<div class="p-12 text-center text-gray-400"><div class="text-3xl mb-2">📋</div><p class="text-sm">No booking requests yet.</p></div>':`
+          <div class="divide-y divide-gray-100">${reqs.map(b=>`
+            <div class="px-6 py-4 flex items-center gap-4 hover:bg-gray-50">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-gray-900 text-sm">${b.client_name}</span>
+                  ${statusBadge(b.status)}
+                </div>
+                <div class="text-sm text-gray-500 mt-0.5">${new Date(b.requested_date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})} • ${fmt(b.start_time)} – ${fmt(b.end_time)}</div>
+                ${b.message?`<div class="text-xs text-gray-400 mt-0.5 italic truncate">"${b.message}"</div>`:''}
+              </div>
+              ${b.status==='pending'?`<div class="flex gap-2 flex-shrink-0">
+                <button onclick="updateStatus(${b.id},'accepted')" class="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-green-700">Accept</button>
+                <button onclick="updateStatus(${b.id},'rejected')" class="bg-white text-red-600 border border-red-200 text-xs px-3 py-1.5 rounded-lg hover:bg-red-50">Decline</button>
+              </div>`:''}
+            </div>`).join('')}</div>`}
+        </div>`
+    }
+
+    async function updateStatus(id, status) {
+      await fetch(`/api/admin/bookings/${id}`, {
+        method: 'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})
+      })
+      await loadData()
+    }
+
+    async function changeAvailWeek(dir) {
+      weekOffset += dir
+      const ws = toYMD(getMonday(weekOffset))
+      const data = await fetch(`/api/admin/clients?weekStart=${ws}`).then(r=>r.json())
+      allAvailability = data.availability || []
+      renderAvailabilityGrid(allAvailability)
+    }
+
+    async function loadData() {
+      const [bookData, clientData] = await Promise.all([
+        fetch('/api/admin/bookings').then(r=>r.json()),
+        fetch(`/api/admin/clients?weekStart=${toYMD(getMonday(weekOffset))}`).then(r=>r.json())
+      ])
+      allRequests = bookData.requests || []
+      allAvailability = clientData.availability || []
+
+      const pending = allRequests.filter(r=>r.status==='pending').length
+      const accepted = allRequests.filter(r=>r.status==='accepted').length
+      const rejected = allRequests.filter(r=>r.status==='rejected').length
+      document.getElementById('stat-pending').textContent = pending
+      document.getElementById('stat-accepted').textContent = accepted
+      document.getElementById('stat-rejected').textContent = rejected
+      document.getElementById('stat-total').textContent = allRequests.length
+
+      renderRequests(allRequests)
+      renderAvailabilityGrid(allAvailability)
+      renderHistory(allRequests)
+    }
+
+    async function init() {
+      const user = await requireAuth('admin')
+      if (!user) return
+      renderNav(user)
+      await loadData()
+    }
+    init()
+  </script>
+</body>
+</html>

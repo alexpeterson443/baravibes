@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard – AddyCleans</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="nav"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div class="mb-8">
+      <h1 id="welcome" class="text-2xl font-bold text-gray-900">Welcome back! 👋</h1>
+      <p class="text-gray-500 mt-1">Here's your cleaning schedule at a glance.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      <div class="bg-green-50 rounded-2xl p-5">
+        <div id="stat-upcoming" class="text-3xl font-bold text-green-600">0</div>
+        <div class="text-sm text-gray-600 mt-1">Upcoming cleanings</div>
+      </div>
+      <div class="bg-amber-50 rounded-2xl p-5">
+        <div id="stat-pending" class="text-3xl font-bold text-amber-600">0</div>
+        <div class="text-sm text-gray-600 mt-1">Pending requests</div>
+      </div>
+      <div class="bg-blue-50 rounded-2xl p-5">
+        <div id="stat-total" class="text-3xl font-bold text-blue-600">0</div>
+        <div class="text-sm text-gray-600 mt-1">Total sessions</div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+      <!-- Calendar -->
+      <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-semibold text-gray-900">This Week's Schedule</h2>
+            <p id="week-range" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <a href="/book.html" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-green-700">+ Request booking</a>
+        </div>
+        <div id="calendar" class="grid grid-cols-7 divide-x divide-gray-100"></div>
+        <div class="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-500">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 bg-green-200 rounded inline-block"></span> Addy available</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 bg-blue-200 rounded inline-block"></span> Booked</span>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="space-y-4">
+        <!-- Quick actions -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h3 class="font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <div class="space-y-2">
+            <a href="/availability.html" class="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors">
+              <span class="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg">📅</span>
+              <div>
+                <div class="text-sm font-medium text-gray-800">Set my availability</div>
+                <div class="text-xs text-gray-500">Tell Addy when you're home</div>
+              </div>
+            </a>
+            <a href="/book.html" class="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors">
+              <span class="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg">✍️</span>
+              <div>
+                <div class="text-sm font-medium text-gray-800">Request a booking</div>
+                <div class="text-xs text-gray-500">Pick a date and time</div>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        <!-- My bookings -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h3 class="font-semibold text-gray-900 mb-4">My Bookings</h3>
+          <div id="my-bookings"><p class="text-sm text-gray-400 text-center py-4">Loading…</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script>
+    const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+    function getMonday(offset=0) {
+      const d = new Date()
+      const day = d.getDay()
+      d.setDate(d.getDate() - (day===0?6:day-1) + offset*7)
+      d.setHours(0,0,0,0)
+      return d
+    }
+
+    function toYMD(d) { return d.toISOString().split('T')[0] }
+
+    function buildCalendar(adminAvailability, acceptedBookings) {
+      const monday = getMonday()
+      const days = Array.from({length:7}, (_,i) => { const d=new Date(monday); d.setDate(d.getDate()+i); return d })
+
+      const availMap = {}
+      adminAvailability.forEach(s => availMap[s.day_of_week] = s)
+      const bookingsByDay = {}
+      acceptedBookings.forEach(b => {
+        const dow = new Date(b.requested_date+'T00:00:00').getDay()
+        if (!bookingsByDay[dow]) bookingsByDay[dow] = []
+        bookingsByDay[dow].push(b)
+      })
+
+      const start = days[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      const end = days[6].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      document.getElementById('week-range').textContent = `${start} – ${end}`
+
+      document.getElementById('calendar').innerHTML = days.map(day => {
+        const dow = day.getDay()
+        const slot = availMap[dow]
+        const isToday = toYMD(day) === toYMD(new Date())
+        const bookings = bookingsByDay[dow] || []
+        return `
+          <div class="p-3 ${isToday?'bg-green-50':''}">
+            <div class="text-center mb-2">
+              <div class="text-xs font-medium ${isToday?'text-green-600':'text-gray-500'}">${DAYS[dow]}</div>
+              <div class="text-lg font-bold mx-auto w-8 h-8 flex items-center justify-center rounded-full ${isToday?'bg-green-600 text-white':'text-gray-800'}">${day.getDate()}</div>
+            </div>
+            ${slot ? `
+              <div class="bg-green-50 border border-green-100 rounded text-center py-1 px-0.5 mb-1">
+                <div class="text-xs text-green-600 font-medium leading-tight">${slot.start_time}–${slot.end_time}</div>
+              </div>
+              ${bookings.map(b=>`<div class="bg-blue-50 border border-blue-100 rounded px-1 py-1 mb-1"><div class="text-xs text-blue-700 font-medium truncate">${b.start_time}</div><div class="text-xs text-blue-500 truncate">${b.client_name}</div></div>`).join('')}
+            ` : '<div class="text-center mt-1"><span class="text-xs text-gray-300">—</span></div>'}
+          </div>`
+      }).join('')
+    }
+
+    async function init() {
+      const user = await requireAuth('client')
+      if (!user) return
+      renderNav(user)
+      document.getElementById('welcome').textContent = `Welcome back, ${user.name.split(' ')[0]}! 👋`
+
+      const [bookData, availData] = await Promise.all([
+        fetch('/api/bookings').then(r=>r.json()),
+        fetch('/api/availability').then(r=>r.json())
+      ])
+
+      const { myBookings, acceptedBookings } = bookData
+      const today = toYMD(new Date())
+      const upcoming = myBookings.filter(b => b.status==='accepted' && b.requested_date >= today)
+      const pending = myBookings.filter(b => b.status==='pending')
+
+      document.getElementById('stat-upcoming').textContent = upcoming.length
+      document.getElementById('stat-pending').textContent = pending.length
+      document.getElementById('stat-total').textContent = myBookings.filter(b=>b.status==='accepted').length
+
+      buildCalendar(availData.adminAvailability||[], acceptedBookings||[])
+
+      if (myBookings.length === 0) {
+        document.getElementById('my-bookings').innerHTML = `<div class="text-center py-4"><div class="text-3xl mb-2">📭</div><p class="text-sm text-gray-500">No bookings yet</p><a href="/book.html" class="text-xs text-green-600 hover:underline mt-1 block">Request your first session →</a></div>`
+      } else {
+        document.getElementById('my-bookings').innerHTML = myBookings.slice(0,8).map(b => `
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-800 truncate">${new Date(b.requested_date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</div>
+              <div class="text-xs text-gray-500">${b.start_time} – ${b.end_time}</div>
+            </div>
+            ${statusBadge(b.status)}
+          </div>`).join('')
+      }
+    }
+
+    init()
+  </script>
+</body>
+</html>
