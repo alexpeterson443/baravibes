@@ -7,7 +7,7 @@ export async function GET() {
   if (!session.user || session.user.role !== 'admin') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return NextResponse.json({ slots: getAdminAvailability() })
+  return NextResponse.json({ slots: await getAdminAvailability() })
 }
 
 export async function POST(request) {
@@ -21,7 +21,7 @@ export async function POST(request) {
     if (!Array.isArray(slots)) {
       return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
     }
-    setAdminAvailability(slots)
+    await setAdminAvailability(slots)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error(err)

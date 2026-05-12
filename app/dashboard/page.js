@@ -6,7 +6,6 @@ import { getClientBookings, getAdminAvailability, getAcceptedBookings } from '@/
 import { format, startOfWeek, addDays, parseISO, isToday, isFuture, isPast } from 'date-fns'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 function statusBadge(status) {
   const map = {
@@ -19,11 +18,9 @@ function statusBadge(status) {
 
 function WeekCalendar({ adminAvailability, acceptedBookings }) {
   const today = new Date()
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday
-
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
-  // Build a map: dayOfWeek -> { adminSlot, bookings[] }
   const availMap = {}
   for (const slot of adminAvailability) {
     availMap[slot.day_of_week] = slot
@@ -114,24 +111,22 @@ export default async function DashboardPage() {
   if (!session.user) redirect('/login')
   if (session.user.role === 'admin') redirect('/admin')
 
-  const myBookings = getClientBookings(session.user.id)
-  const adminAvailability = getAdminAvailability()
-  const acceptedBookings = getAcceptedBookings()
+  const [myBookings, adminAvailability, acceptedBookings] = await Promise.all([
+    getClientBookings(session.user.id),
+    getAdminAvailability(),
+    getAcceptedBookings(),
+  ])
 
   const upcoming = myBookings.filter(
     (b) => b.status === 'accepted' && (isFuture(parseISO(b.requested_date)) || isToday(parseISO(b.requested_date)))
   )
   const pending = myBookings.filter((b) => b.status === 'pending')
-  const past = myBookings.filter(
-    (b) => b.status === 'accepted' && isPast(parseISO(b.requested_date)) && !isToday(parseISO(b.requested_date))
-  )
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar user={session.user} />
 
       <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">
             Welcome back, {session.user.name.split(' ')[0]}! 👋
@@ -139,7 +134,6 @@ export default async function DashboardPage() {
           <p className="text-gray-500 mt-1">Here&apos;s your cleaning schedule at a glance.</p>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {[
             { label: 'Upcoming cleanings', value: upcoming.length, color: 'text-green-600', bg: 'bg-green-50' },
@@ -154,36 +148,23 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Calendar */}
           <div className="lg:col-span-2">
             <WeekCalendar adminAvailability={adminAvailability} acceptedBookings={acceptedBookings} />
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-4">
-            {/* Quick actions */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-2">
-                <Link
-                  href="/availability"
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors group"
-                >
-                  <span className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg group-hover:bg-green-200 transition-colors">
-                    📅
-                  </span>
+                <Link href="/availability" className="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors group">
+                  <span className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg group-hover:bg-green-200 transition-colors">📅</span>
                   <div>
                     <div className="text-sm font-medium text-gray-800">Set my availability</div>
                     <div className="text-xs text-gray-500">Tell Addy when you&apos;re home</div>
                   </div>
                 </Link>
-                <Link
-                  href="/book"
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors group"
-                >
-                  <span className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg group-hover:bg-green-200 transition-colors">
-                    ✍️
-                  </span>
+                <Link href="/book" className="flex items-center gap-3 p-3 rounded-xl hover:bg-green-50 transition-colors group">
+                  <span className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center text-lg group-hover:bg-green-200 transition-colors">✍️</span>
                   <div>
                     <div className="text-sm font-medium text-gray-800">Request a booking</div>
                     <div className="text-xs text-gray-500">Pick a date and time</div>
@@ -192,7 +173,6 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            {/* My bookings */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h3 className="font-semibold text-gray-900 mb-4">My Bookings</h3>
               {myBookings.length === 0 ? (

@@ -10,12 +10,14 @@ export async function GET(request) {
   const weekStart = searchParams.get('weekStart')
 
   if (weekStart) {
-    const mySlots = getMyAvailabilityForWeek(session.user.id, weekStart)
-    return NextResponse.json({ slots: mySlots })
+    const slots = await getMyAvailabilityForWeek(session.user.id, weekStart)
+    return NextResponse.json({ slots })
   }
 
-  const adminAvailability = getAdminAvailability()
-  const acceptedBookings = getAcceptedBookings()
+  const [adminAvailability, acceptedBookings] = await Promise.all([
+    getAdminAvailability(),
+    getAcceptedBookings(),
+  ])
   return NextResponse.json({ adminAvailability, acceptedBookings })
 }
 
@@ -30,7 +32,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
     }
 
-    setClientAvailability(session.user.id, weekStart, slots)
+    await setClientAvailability(session.user.id, weekStart, slots)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error(err)

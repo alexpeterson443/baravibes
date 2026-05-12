@@ -7,5 +7,5 @@ export async function GET() {
   if (!session.user || session.user.role !== 'admin') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return NextResponse.json({ requests: getAllBookingRequests() })
+  return NextResponse.json({ requests: await getAllBookingRequests() })
 }

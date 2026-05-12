@@ -6,8 +6,10 @@ export async function GET() {
   const session = await getSession()
   if (!session.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const myBookings = getClientBookings(session.user.id)
-  const acceptedBookings = getAcceptedBookings()
+  const [myBookings, acceptedBookings] = await Promise.all([
+    getClientBookings(session.user.id),
+    getAcceptedBookings(),
+  ])
   return NextResponse.json({ myBookings, acceptedBookings })
 }
 
@@ -22,7 +24,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Date and times are required' }, { status: 400 })
     }
 
-    createBookingRequest({
+    await createBookingRequest({
       clientId: session.user.id,
       date,
       startTime,

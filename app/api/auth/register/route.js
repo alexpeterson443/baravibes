@@ -14,7 +14,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
     }
 
-    const existing = getUserByEmail(email)
+    const existing = await getUserByEmail(email.toLowerCase())
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
     }
@@ -22,7 +22,7 @@ export async function POST(request) {
     const passwordHash = await bcrypt.hash(password, 10)
     const role = email.toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase() ? 'admin' : 'client'
 
-    const result = createUser({ name, email: email.toLowerCase(), passwordHash, role })
+    const result = await createUser({ name, email: email.toLowerCase(), passwordHash, role })
 
     const session = await getSession()
     session.user = { id: result.lastInsertRowid, name, email: email.toLowerCase(), role }

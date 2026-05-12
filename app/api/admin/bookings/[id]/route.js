@@ -14,7 +14,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    updateBookingStatus(Number(params.id), status)
+    await updateBookingStatus(Number(params.id), status)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error(err)

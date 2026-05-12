@@ -11,8 +11,10 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const weekStart = searchParams.get('weekStart')
 
-  const clients = getAllClients()
-  const availability = weekStart ? getClientAvailabilityForWeek(weekStart) : []
+  const [clients, availability] = await Promise.all([
+    getAllClients(),
+    weekStart ? getClientAvailabilityForWeek(weekStart) : Promise.resolve([]),
+  ])
 
   return NextResponse.json({ clients, availability })
 }
